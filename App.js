@@ -8,6 +8,21 @@ import { getMainDefinition } from "apollo-utilities";
 import ApolloClient from "apollo-client";
 import { InMemoryCache } from "apollo-cache-inmemory";
 import { ApolloProvider, Subscription, Mutation } from "react-apollo";
+import { onError } from "apollo-link-error";
+import { Buffer } from "buffer";
+import { View } from "react-native";
+import { Header } from "react-native-elements";
+
+const errorLink = onError(({ networkError, graphQLErrors }) => {
+  if (graphQLErrors) {
+    graphQLErrors.map(({ message, locations, path }) =>
+      console.log(
+        `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`
+      )
+    );
+  }
+  if (networkError) console.log(`[Network error]: ${networkError}`);
+});
 
 // Create an http link:
 const httpLink = new HttpLink({
@@ -55,8 +70,13 @@ const COMMENTS_SUBSCRIPTION = gql`
 `;
 
 const SEND_MESSAGE = gql`
-  mutation sendMessage($message: String!) {
-    sendMessage(message: $message) {
+  mutation sendMessage(
+    $id: String!
+    $text: String!
+    $createdAt: String!
+    $user: UserInput!
+  ) {
+    sendMessage(id: $id, text: $text, createdAt: $createdAt, user: $user) {
       text
     }
   }
@@ -68,8 +88,19 @@ class Example extends React.Component {
   };
 
   onSend(mutation, messages = []) {
-    console.log(messages[messages.length - 1].text);
-    mutation({ variables: { message: messages[messages.length - 1].text } });
+    updated_message = messages[messages.length - 1];
+    console.log(updated_message);
+    let buff = Buffer.from(updated_message._id);
+    let base64id = buff.toString("base64");
+
+    mutation({
+      variables: {
+        id: base64id,
+        text: updated_message.text,
+        createdAt: updated_message.createdAt,
+        user: { name: "GeorginaSoros" }
+      }
+    });
 
     this.setState(previousState => ({
       messages: GiftedChat.append(previousState.messages, messages)
@@ -81,11 +112,17 @@ class Example extends React.Component {
   }
 
   updateState = message => {
+    avatar_range = [...Array(20).keys()];
+    var randImageId =
+      avatar_range[Math.floor(Math.random() * avatar_range.length)];
     update_message = [
       {
         _id: message.id,
         text: message.text,
-        user: message.user,
+        user: {
+          name: message.user.name,
+          avatar: `https://poechat-icons.s3-us-west-2.amazonaws.com/${randImageId}.jpg`
+        },
         createdAt: new Date(message.createdAt).toISOString()
       }
     ];
@@ -126,7 +163,14 @@ class Example extends React.Component {
 
 const App = () => (
   <ApolloProvider client={client}>
-    <Example />
+    <View style={{ flex: 1 }}>
+      <Header
+        leftComponent={{ icon: "menu", color: "#fff" }}
+        centerComponent={{ text: "Path of Chatting", style: { color: "#fff" } }}
+        rightComponent={{ icon: "home", color: "#fff" }}
+      />
+      <Example />
+    </View>
   </ApolloProvider>
 );
 
